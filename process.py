@@ -502,6 +502,7 @@ if __name__ == '__main__':
     viridis = plt.colormaps['viridis']
     palette = {
         "bc_re": viridis(0.0),
+        "bc_re_c": viridis(0.1),
         "ff_linpro": viridis(0.2),
         "ff_linpro_c": viridis(0.3),
         "ff_linpro_ac": viridis(0.4),
@@ -509,6 +510,22 @@ if __name__ == '__main__':
         "sm_av_c": viridis(0.7),
         "sm_av_ac": viridis(0.9),
     }
+
+    # Base-algorithm families, used to facet the time-series line charts so each
+    # panel shows a single base algorithm and its clustered variants (few lines
+    # per panel -> the +-1 sigma bands stay readable).
+    families = [
+        (r"\texttt{bc\_re}", ["bc_re", "bc_re_c"]),
+        (r"\texttt{sm\_av}", ["sm_av", "sm_av_c"]),
+        (r"\texttt{ff\_linpro}", ["ff_linpro", "ff_linpro_c", "ff_linpro_ac"]),
+    ]
+
+    def variant_linestyle(algo):
+        if algo.endswith("_ac"):
+            return "dashed"
+        if algo.endswith("_c"):
+            return "solid"
+        return "dotted"
 
     def plot_metric_by_algorithm(dataset, cam_herd_ratio, number_of_herds, labels):
         fig, ax = plt.subplots(1, len(dataset.columns), figsize=(18, 4), sharey=False, layout="constrained")
@@ -538,32 +555,44 @@ if __name__ == '__main__':
 
 
     def plot_k_coverage_by_algorithm(dataset, errors, cam_herd_ratio, number_of_herds):
+        # Unified single-row layout (1 panel per k). Legibility with 7 algorithms
+        # comes from color-by-family + linestyle-by-variant (base dotted, _c solid,
+        # _ac dashed), faint +-1 sigma bands and a single shared legend below.
+        order = [a for _, fam in families for a in fam]
+        plus_sigma = dataset + errors
+        minus_sigma = dataset - errors
+        time = np.arange(minTime, maxTime, (maxTime - minTime) / timeSamples)
+        time[-1] = maxTime
+        present = set(dataset.index.get_level_values(0).unique())
+
         fig, ax = plt.subplots(1, len(dataset.columns), figsize=(18, 4), sharey=False, layout="constrained")
         fig.suptitle(r"$\nu$=" + str(int(cam_herd_ratio)) + r" - $\zeta$=" + str(int(number_of_herds)), fontsize=20)
 
-        plus_sigma = dataset + errors
-        minus_sigma = dataset - errors
-        # get time values from index
-        time = np.arange(minTime, maxTime, (maxTime - minTime) / timeSamples)
-        time[-1] = maxTime
-
         for a, k in zip(ax, dataset.columns):
-            sns.lineplot(dataset, ax=a, x="time", y=k, palette=palette, hue="Algorithm")
-            for i, algo in enumerate(dataset[k].index.get_level_values(0).unique()):
-                a.fill_between(time, minus_sigma[k][algo], plus_sigma[k][algo], alpha=0.3,
-                               color=palette[algo])
-            # a.set_title(k, fontsize=16)
+            for algo in order:
+                if algo not in present:
+                    continue
+                a.plot(time, dataset[k][algo], linestyle=variant_linestyle(algo),
+                       color=palette[algo], linewidth=2, label=algo.replace("_", r"\_"))
+                a.fill_between(time, minus_sigma[k][algo], plus_sigma[k][algo],
+                               alpha=0.08, color=palette[algo])
+            a.set_title(k, fontsize=16)
             a.xaxis.grid(True)
             a.yaxis.grid(True)
             a.tick_params(labelsize=15)
             a.set_ylim(0, 1)
             a.margins(x=0)
+            a.set_xlabel("time", fontsize=15)
             a.xaxis.get_label().set_fontsize(17)
             a.yaxis.get_label().set_fontsize(17)
             a.set_xlim(minTime, maxTime)
 
+        handles, labels_ = ax[0].get_legend_handles_labels()
+        fig.legend(handles, labels_, loc="upper center", bbox_to_anchor=(0.5, 0.0),
+                   ncol=len(order), fontsize=13)
         fig.savefig(
-            f'{output_directory}/{current_experiment}/custom/k_coverage_by_algorithms_CamHerRatio={cam_herd_ratio}_NumberOfHerds={number_of_herds}.pdf')
+            f'{output_directory}/{current_experiment}/custom/k_coverage_by_algorithms_CamHerRatio={cam_herd_ratio}_NumberOfHerds={number_of_herds}.pdf',
+            bbox_inches='tight')
 
 
     # Plot metrics by algorithms
@@ -606,6 +635,7 @@ if __name__ == '__main__':
         ax.set_title(f"CamHerdRatio={cam_herd_ratio} - NumberOfHerds={number_of_herds}", fontsize=12)
         ax.xaxis.grid(True)
         ax.yaxis.grid(True)
+        ax.tick_params(axis='x', rotation=45)
         ax.set(ylabel=r"$G$")
         ax.xaxis.get_label().set_fontsize(10)
 
@@ -641,6 +671,7 @@ if __name__ == '__main__':
             a.xaxis.grid(True)
             a.yaxis.grid(True)
             a.tick_params(labelsize=15)
+            a.tick_params(axis='x', rotation=45)
             a.set(ylabel=r"$G$")
             a.xaxis.get_label().set_fontsize(17)
             a.yaxis.get_label().set_fontsize(17)
@@ -654,36 +685,48 @@ if __name__ == '__main__':
     # Geometric average per algorithm
 
     def plot_geometric_average_per_algorithm(ds, errors, labels):
-        fig, ax = plt.subplots(1, len(ds.columns), figsize=(18, 4), sharey=False, layout="constrained")
-        fig.suptitle(f"Geometric Average", fontsize=20)
-
+        # Unified single-row layout (1 panel per metric). Legibility with 7
+        # algorithms comes from color-by-family + linestyle-by-variant (base
+        # dotted, _c solid, _ac dashed), faint bands and a shared legend below.
         custom_labels = {
             "Body Coverage": r"$\Diamond$",
             "Fov Distance": r"$\Gamma$",
             "Noise Perceived (normalized)": r"$\rho$"
         }
 
+        order = [a for _, fam in families for a in fam]
         plus_sigma = ds + errors
         minus_sigma = ds - errors
         time = np.arange(minTime, maxTime, (maxTime - minTime) / timeSamples)
         time[-1] = maxTime
+        present = set(ds.index.get_level_values(0).unique())
+
+        fig, ax = plt.subplots(1, len(ds.columns), figsize=(18, 4), sharey=False, layout="constrained")
+        fig.suptitle("Geometric Average", fontsize=20)
 
         for a, metric, label in zip(ax, ds.columns, labels):
-            sns.lineplot(ds, ax=a, x="time", y=metric, palette=palette, hue="Algorithm")
-            for i, algo in enumerate(ds[metric].index.get_level_values(0).unique()):
-                a.fill_between(time, minus_sigma[metric][algo], plus_sigma[metric][algo], alpha=0.3,
-                               color=palette[algo])
-            # a.set_title(label, fontsize=16)
+            for algo in order:
+                if algo not in present:
+                    continue
+                a.plot(time, ds[metric][algo], linestyle=variant_linestyle(algo),
+                       color=palette[algo], linewidth=2, label=algo.replace("_", r"\_"))
+                a.fill_between(time, minus_sigma[metric][algo], plus_sigma[metric][algo],
+                               alpha=0.08, color=palette[algo])
             a.xaxis.grid(True)
             a.yaxis.grid(True)
             a.tick_params(labelsize=15)
             a.set(ylabel=r"{}".format(custom_labels[label]))
             a.margins(x=0)
+            a.set_xlabel("time", fontsize=15)
             a.xaxis.get_label().set_fontsize(17)
             a.yaxis.get_label().set_fontsize(17)
             a.set_xlim(minTime, maxTime)
 
-        fig.savefig(f'{output_directory}/{current_experiment}/custom/geometric_average_by_algorithms.pdf')
+        handles, labels_ = ax[0].get_legend_handles_labels()
+        fig.legend(handles, labels_, loc="upper center", bbox_to_anchor=(0.5, 0.0),
+                   ncol=len(order), fontsize=13)
+        fig.savefig(f'{output_directory}/{current_experiment}/custom/geometric_average_by_algorithms.pdf',
+                    bbox_inches='tight')
 
 
     size = len(dataset_means["CamHerdRatio"]) * len(dataset_means["NumberOfHerds"])

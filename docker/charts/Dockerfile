@@ -1,11 +1,11 @@
 FROM python:3.13.1
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 RUN mkdir /experiment
 WORKDIR /experiment
 COPY .python-version ./
 COPY process.py ./
-COPY requirements.txt ./
+COPY pyproject.toml uv.lock ./
 RUN apt-get update
 RUN apt install -y texlive-latex-extra texlive-fonts-recommended dvipng cm-super
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-CMD python process.py
+RUN uv sync --locked
+CMD uv run process.py
