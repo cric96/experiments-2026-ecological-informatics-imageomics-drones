@@ -2,7 +2,7 @@
 name = "ecological-informatics-imageomics-drones"
 version = "0.1.0"
 description = "Charts generation for the Ecological Informatics herd-k-coverage experiment"
-requires-python = "==3.13.1"
+requires-python = "==3.13.14"
 dependencies = [
     "matplotlib==3.10.9",
     "xarray==2024.11.0",
