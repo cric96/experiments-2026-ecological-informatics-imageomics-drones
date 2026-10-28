@@ -1,4 +1,4 @@
-FROM python:3.14.8
+FROM python:3.15.1
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 RUN mkdir /experiment
 WORKDIR /experiment
